@@ -6,12 +6,12 @@ import androidx.appcompat.app.AppCompatActivity
 import android.view.WindowManager.LayoutParams.*
 import android.widget.Toast
 import com.santaananortemetapan.uberclone.databinding.ActivityMainBinding
+import com.santaananortemetapan.uberclone.providers.AuthProvider
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-
-
+    val authProvider = AuthProvider()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -22,7 +22,6 @@ class MainActivity : AppCompatActivity() {
             FLAG_LAYOUT_NO_LIMITS,
             FLAG_LAYOUT_NO_LIMITS
         )
-
 
         binding.btnRegister.setOnClickListener { goToRegister() }
         binding.btnLogin.setOnClickListener { login() }
@@ -41,8 +40,19 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        authProvider.login(email, password).addOnCompleteListener{
+            if (it.isSuccessful){
+                goToMap()
+            }else{
+                Toast.makeText(this, "error iniciando sesion", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
-
+    private fun goToMap(){
+        val i = Intent(this, MapActivity::class.java)
+        i.flags = Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK
+        startActivity(i)
     }
 
 
@@ -51,5 +61,11 @@ class MainActivity : AppCompatActivity() {
         startActivity(i)
     }
 
+    override fun onStart() {
+        super.onStart()
+        if(authProvider.existSession()){
+            goToMap()
+        }
+    }
 
 }
