@@ -5,12 +5,15 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
+import android.location.Geocoder
 import android.location.Location
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.View
+import android.view.WindowManager
 import android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -33,6 +36,7 @@ import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.MapStyleOptions
 import com.google.android.gms.maps.model.Marker
 import com.google.android.gms.maps.model.MarkerOptions
 import com.google.firebase.firestore.DocumentId
@@ -49,20 +53,24 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback, Listener {
     private var easyWayLocation: EasyWayLocation? = null
     private var myLocationLatLng: LatLng? = null
     private val geoProvider = GeoProvider()
-    private val authProvider = AuthProvider()
+
+    // GOOGLE PLACES
+    private var originName = ""
+    private var destinationName = ""
+    private var originLatLng: LatLng? = null
+    private var destinationLatLng: LatLng? = null
+
     private var isLocationEnabled = false
 
     private val driverMarkers = ArrayList<Marker>()
     private val driversLocation = ArrayList<DriverLocation>()
 
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMapBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        window.setFlags(
-            FLAG_LAYOUT_NO_LIMITS,
-            FLAG_LAYOUT_NO_LIMITS
-        )
+        window.setFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
 
         val mapFragment = supportFragmentManager.findFragmentById(R.id.map) as SupportMapFragment
         mapFragment.getMapAsync(this)
@@ -81,50 +89,57 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback, Listener {
             Manifest.permission.ACCESS_COARSE_LOCATION
         ))
 
-
     }
 
     val locationPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permission ->
-        when {
-            permission.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false) -> {
-                Log.d("LOCALIZACION", "permiso aceptado")
-                 easyWayLocation?.startLocation()
 
-            }
-            permission.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false) -> {
-                Log.d("LOCALIZACION", "permiso concedido con limitacion")
-                 easyWayLocation?.startLocation()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            when {
+                permission.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false) -> {
+                    Log.d("LOCALIZACION", "Permiso concedido")
+                    easyWayLocation?.startLocation()
 
-            }
-            else -> {
-                Log.d("LOCALIZACION", "permiso no aceptado")
+                }
+                permission.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false) -> {
+                    Log.d("LOCALIZACION", "Permiso concedido con limitacion")
+                    easyWayLocation?.startLocation()
+
+                }
+                else -> {
+                    Log.d("LOCALIZACION", "Permiso no concedido")
+                }
             }
         }
+
     }
 
 
-    private fun getNearbyDrivers(){
+
+
+    private fun getNearbyDrivers() {
 
         if (myLocationLatLng == null) return
 
-        geoProvider.getNearbyDrivers(myLocationLatLng!!, 20.0).addGeoQueryEventListener(object : GeoQueryEventListener {
+        geoProvider.getNearbyDrivers(myLocationLatLng!!, 30.0).addGeoQueryEventListener(object: GeoQueryEventListener {
 
             override fun onKeyEntered(documentID: String, location: GeoPoint) {
-                for(marker in driverMarkers){
-                    if(marker.tag != null){
-                        if(marker.tag == documentID){
+
+                Log.d("FIRESTORE", "Document id: $documentID")
+                Log.d("FIRESTORE", "location: $location")
+
+                for (marker in driverMarkers) {
+                    if (marker.tag != null) {
+                        if (marker.tag == documentID) {
                             return
                         }
                     }
                 }
-
                 // CREAMOS UN NUEVO MARCADOR PARA EL CONDUCTOR CONECTADO
                 val driverLatLng = LatLng(location.latitude, location.longitude)
                 val marker = googleMap?.addMarker(
-                    MarkerOptions()
-                        .position(driverLatLng).title("Conductor disponible").icon(
-                            BitmapDescriptorFactory.fromResource(R.drawable.uber_car)
-                        )
+                    MarkerOptions().position(driverLatLng).title("Conductor disponible").icon(
+                        BitmapDescriptorFactory.fromResource(R.drawable.uber_car)
+                    )
                 )
 
                 marker?.tag = documentID
@@ -133,43 +148,45 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback, Listener {
                 val dl = DriverLocation()
                 dl.id = documentID
                 driversLocation.add(dl)
-
             }
 
             override fun onKeyExited(documentID: String) {
-                for (marker in driverMarkers){
-                    if(marker.tag != null) {
-                        if(marker.tag == documentID){
+                for (marker in driverMarkers) {
+                    if (marker.tag != null) {
+                        if (marker.tag == documentID) {
                             marker.remove()
                             driverMarkers.remove(marker)
                             driversLocation.removeAt(getPositionDriver(documentID))
+                            return
                         }
                     }
                 }
             }
 
-
             override fun onKeyMoved(documentID: String, location: GeoPoint) {
-                for (marker in driverMarkers){
+
+                for (marker in driverMarkers) {
 
                     val start = LatLng(location.latitude, location.longitude)
                     var end: LatLng? = null
                     val position = getPositionDriver(marker.tag.toString())
 
-                    if(marker.tag != null){
-                        if(marker.tag == documentID){
-                           // marker.position = LatLng(location.latitude, location.longitude)
+                    if (marker.tag != null) {
+                        if (marker.tag == documentID) {
+//                            marker.position = LatLng(location.latitude, location.longitude)
 
-                            if(driversLocation[position].latlng != null){
+                            if (driversLocation[position].latlng != null) {
                                 end = driversLocation[position].latlng
                             }
                             driversLocation[position].latlng = LatLng(location.latitude, location.longitude)
-                            if(end != null) {
+                            if (end  != null) {
                                 CarMoveAnim.carAnim(marker, end, start)
                             }
+
                         }
                     }
                 }
+
             }
 
             override fun onGeoQueryError(exception: Exception) {
@@ -180,11 +197,20 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback, Listener {
 
             }
 
-
-
-
-
         })
+    }
+
+
+
+    private fun getPositionDriver(id: String): Int {
+        var position = 0
+        for (i in driversLocation.indices) {
+            if (id == driversLocation[i].id) {
+                position = i
+                break
+            }
+        }
+        return position
     }
 
 
@@ -192,11 +218,10 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback, Listener {
 
 
     override fun onResume() {
-        super.onResume()
-
+        super.onResume() // ABRIMOS LA PANTALLA ACTUAL
     }
 
-    override fun onDestroy() {
+    override fun onDestroy() { // CIERRA APLICACION O PASAMOS A OTRA ACTIVITY
         super.onDestroy()
         easyWayLocation?.endUpdates()
     }
@@ -204,7 +229,8 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback, Listener {
     override fun onMapReady(map: GoogleMap) {
         googleMap = map
         googleMap?.uiSettings?.isZoomControlsEnabled = true
-        //  easyWayLocation?.startLocation()
+
+//        easyWayLocation?.startLocation();
 
         if (ActivityCompat.checkSelfPermission(
                 this,
@@ -214,9 +240,12 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback, Listener {
                 Manifest.permission.ACCESS_COARSE_LOCATION
             ) != PackageManager.PERMISSION_GRANTED
         ) {
+
             return
         }
-        googleMap?.isMyLocationEnabled = true
+        googleMap?.isMyLocationEnabled = false
+
+
 
     }
 
@@ -224,13 +253,13 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback, Listener {
 
     }
 
-    override fun currentLocation(location: Location) { // ACTUALIZCION POSICION TIEMPO REAL
-        myLocationLatLng = LatLng(location.latitude, location.longitude) // POSICION ACTUAL
+    override fun currentLocation(location: Location) { // ACTUALIZACION DE LA POSICION EN TIEMPO REAL
+        myLocationLatLng = LatLng(location.latitude, location.longitude) // LAT Y LONG DE LA POSICION ACTUAL
 
         if (!isLocationEnabled) { // UNA SOLA VEZ
-            isLocationEnabled = false
+            isLocationEnabled = true
             googleMap?.moveCamera(CameraUpdateFactory.newCameraPosition(
-                CameraPosition.builder().target(myLocationLatLng!!).zoom(17f).build()
+                CameraPosition.builder().target(myLocationLatLng!!).zoom(15f).build()
             ))
             getNearbyDrivers()
         }
@@ -238,18 +267,6 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback, Listener {
 
     override fun locationCancelled() {
 
-    }
-
-
-    private fun getPositionDriver(id: String): Int {
-        var position = 0
-        for (i in driversLocation.indices) {
-            if(id == driversLocation[i].id) {
-                position = i
-                break
-            }
-        }
-        return position
     }
 
 
