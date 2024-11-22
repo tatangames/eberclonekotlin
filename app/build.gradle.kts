@@ -49,9 +49,18 @@ dependencies {
     implementation(libs.firebase.auth)
     implementation(libs.firebase.database)
     implementation(libs.firebase.firestore)
-    implementation(libs.firebase.messaging)
 
     implementation("com.beust:klaxon:5.5")
+
+    implementation("com.google.maps.android:maps-ktx:3.2.0")
+    implementation("com.google.maps.android:maps-utils-ktx:3.2.0")
+    implementation("com.google.maps.android:android-maps-utils:2.2.3")
+    implementation("com.google.android.gms:play-services-maps:19.0.0")
+    implementation("com.google.android.gms:play-services-location:20.0.0")
+
+    implementation("com.github.prabhat1707:EasyWayLocation:2.4")
+    implementation("com.github.imperiumlabs:GeoFirestore-Android:v1.5.0")
+
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

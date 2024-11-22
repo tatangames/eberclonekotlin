@@ -4,10 +4,10 @@
     <selectionStates>
       <SelectionState runConfigName="app">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2024-11-21T00:52:54.982921300Z">
+        <DropdownSelection timestamp="2024-11-22T03:51:16.874821400Z">
           <Target type="DEFAULT_BOOT">
             <handle>
-              <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\tatan\.android\avd\Pixel_4_API_26_Oreo.avd" />
+              <DeviceId pluginId="PhysicalDevice" identifier="serial=R5CX50HS10F" />
             </handle>
           </Target>
         </DropdownSelection>
